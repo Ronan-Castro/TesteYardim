@@ -1,0 +1,194 @@
+﻿@page "/"
+@using DesafioYardim.Components.Modal
+@using System.Text
+@inject IDialogService DialogService
+<PageTitle>Home</PageTitle>
+
+<MudFileUpload T="IBrowserFile"
+               Accept=".png, .jpg, .jpeg"
+               @ref="_arquivoUpload"
+               OnFilesChanged="OnInputFileChanged" Hidden="false"
+               InputClass="absolute mud-width-full mud-height-full overflow-hidden z-10"
+               InputStyle="opacity:0" tabindex="-1"
+               @ondrop="@LimparClasseArrastar"
+               @ondragenter="@SetClasseArrastar"
+               @ondragleave="@LimparClasseArrastar"
+               @ondragend="@LimparClasseArrastar">
+    <ActivatorContent>
+        <MudPaper Height="300px" Outlined="true" Class="@_ClasseArrastar">
+            @if (string.IsNullOrEmpty(_arquivoTemporario))
+            {
+                <MudText Typo="Typo.h6">Arraste e solte o arquivo aqui</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.h6">@_arquivoTemporario</MudText>
+            }
+        </MudPaper>
+    </ActivatorContent>
+</MudFileUpload>
+
+<MudButton Color="Color.Primary"
+           Disabled="@(!isValid)"
+           OnClick="@ConverterJsonCsv"
+           Variant="Variant.Filled">
+    Converter de Json para CSV
+</MudButton>
+
+@if (csvData != null && csvData.Count > 0)
+{
+    <MudTable Items="@csvData" Hover="true" Loading="true" LoadingProgressColor="Color.Info">
+        <HeaderContent>
+            @if (csvData.Count > 0)
+            {
+                @foreach (var header in csvData.First().Keys)
+                {
+                    <MudTh>@header</MudTh>
+                }
+            }
+        </HeaderContent>
+        <RowTemplate>
+            @foreach (var item in csvData)
+            {
+                @foreach (var value in item.Values)
+                {
+                    <MudTd>@value</MudTd>
+                }
+            }
+        </RowTemplate>
+    </MudTable>
+}
+@code{
+    List<string> ExtensoesPermitidas = new() { "application/json" };
+
+    string _arquivoTemporario = string.Empty;
+    private bool isValid = false;
+    private string csvOutput = string.Empty;
+    private string csvResult = string.Empty;
+
+    private List<Dictionary<string, string>> csvData = new();
+    private List<string> cabecalho = new();
+
+    private const string PadraoClasseArrastar = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full";
+    private string _ClasseArrastar = PadraoClasseArrastar;
+
+    private void SetClasseArrastar()
+    => _ClasseArrastar = $"{PadraoClasseArrastar} mud-border-primary";
+
+    private void LimparClasseArrastar()
+        => _ClasseArrastar = PadraoClasseArrastar;
+
+
+
+    private MudFileUpload<IBrowserFile>? _arquivoUpload;
+    private IBrowserFile? _arquivoDadosUpload;
+
+    private async void OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        LimparClasseArrastar();
+        var arquivo = e.GetMultipleFiles().FirstOrDefault();
+        if (arquivo != null)
+        {
+            _arquivoDadosUpload = arquivo;
+            if (await ValidarJson()){
+                ExibirJson();
+                isValid = true;
+            }
+            else
+                _arquivoDadosUpload = null;
+        }
+    }
+
+    private async Task ConverterJsonCsv()
+    {
+        if (_arquivoDadosUpload == null)
+            return;
+
+        try
+        {
+            var arquivoStream = _arquivoDadosUpload.OpenReadStream();
+            using (var reader = new System.IO.StreamReader(arquivoStream))
+            {
+                var jsonContent = await reader.ReadToEndAsync();
+
+                var dadosJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+
+                if (dadosJson == null || dadosJson.Count == 0)
+                {
+                    await OpenDialogAsync("JSON inválido ou vazio.", "Erro ao ler conteúdo");
+                    return;
+                }
+                // Converter o conteúdo para CSV
+                csvResult = GerarCsv(dadosJson);
+                csvData = GerarTabela(dadosJson); // Gerar dados para a tabela
+                StateHasChanged(); // Atualiza o componente para refletir as mudanças
+            }
+        }
+        catch (Exception ex)
+        {
+            await OpenDialogAsync($"Erro ao processar o JSON: {ex.Message}", "Erro");
+        }
+    }
+
+    // Gera o CSV a partir de um Dictionary<string, object>
+    private string GerarCsv(Dictionary<string, object> dadosJson)
+    {
+        var csv = new StringBuilder();
+
+        // Adicionar cabeçalho do CSV
+        var cabecalho = string.Join(",", dadosJson.Keys);
+        csv.AppendLine(cabecalho);
+
+        // Adicionar valores do JSON no formato CSV
+        var valores = string.Join(",", dadosJson.Values.Select(v => v.ToString()));
+        csv.AppendLine(valores);
+
+        return csv.ToString();
+    }
+
+    private List<Dictionary<string, string>> GerarTabela(Dictionary<string, object> dadosJson)
+    {
+        var tabela = new List<Dictionary<string, string>>();
+        var row = new Dictionary<string, string>();
+
+        foreach (var key in dadosJson.Keys)
+        {
+            row[key] = dadosJson[key]?.ToString() ?? string.Empty;
+        }
+
+        tabela.Add(row);
+        return tabela;
+    }
+
+
+    private async Task<bool> ValidarJson()
+    {
+        if (_arquivoDadosUpload != null && !ExtensoesPermitidas.Contains(_arquivoDadosUpload.ContentType))
+        {
+            await OpenDialogAsync("Formato inválido! Apenas arquivos JSON são permitidos.", "Formato Inválido");
+            return false;
+        }
+        return true;
+    }
+
+    private Task OpenDialogAsync(string content, string title)
+    {
+        var parameters = new DialogParameters<SimpleDialog>
+        {
+            { x => x.Content, content },
+            { x => x.Title, title }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+
+        return DialogService.ShowAsync<SimpleDialog>("Simple Dialog", parameters, options);
+    }
+
+    private void ExibirJson()
+    {
+        if (_arquivoDadosUpload != null)
+        {
+            _arquivoTemporario = _arquivoDadosUpload.Name;
+            StateHasChanged();
+        }
+    }
+}
