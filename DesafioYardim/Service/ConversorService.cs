@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components.Forms;
 using System.Text;
+using System.Text.Json;
 
 namespace DesafioYardim.Service
 {
@@ -32,7 +33,11 @@ namespace DesafioYardim.Service
                             {
                                 tempData[property.Name] = new List<string>();
                             }
-                            tempData[property.Name].Add(property.Value.GetString());
+                            string valueAsString = property.Value.ValueKind == JsonValueKind.String
+                                                        ? property.Value.GetString()
+                                                        : property.Value.GetRawText();
+                            tempData[property.Name].Add(valueAsString);
+
                         }
 
                         // Amarra a linha aos cabeçalhos na lista de dicionários
@@ -50,7 +55,7 @@ namespace DesafioYardim.Service
 
                     return linhas;
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Caso o JSON esteja mal formatado
                     return null;

@@ -6,7 +6,6 @@
 @inject IConversorService Conversor
 @inject IJSRuntime JSRuntime
 
-
 <PageTitle>ConversorJsonCsv</PageTitle>
 
 <MudFileUpload T="IBrowserFile"
@@ -40,6 +39,12 @@
     Converter de Json para CSV
 </MudButton>
 
+<MudButton Class="ma-3" Color="Color.Error"
+           OnClick="@Limpar"
+           Variant="Variant.Filled">
+    Limpar
+</MudButton>
+
 @if (!string.IsNullOrEmpty(csvResult))
 {
     <MudButton Class="ma-3" Color="Color.Secondary" OnClick="@BaixarCsv" Variant="Variant.Filled">
@@ -47,32 +52,42 @@
     </MudButton>
 }
 
-@if (csvData != null && csvData.Count > 0)
-{
-    <MudText Typo="Typo.h3">Tabela criada a partir do csv gerado</MudText>
-    <MudTable Class="my-3" Items="@csvData" Hover="true" Bordered="true" >
-        <HeaderContent>
-            @if (csvData.Count > 0)
-            {
-                @foreach (var header in csvData.First().Keys)
-                {
-                    <MudTh>@header</MudTh>
-                }
-            }
-        </HeaderContent>
-        <RowTemplate Context="item">
-                @foreach (var value in item.Values)
-                {
-                    <MudTd>@value</MudTd>
-                }
-        </RowTemplate>
-    </MudTable>
+<MudGrid>
+    @if (!string.IsNullOrEmpty(csvResult))
+    {
+        <MudItem xs="6">
+            <MudText Typo="Typo.h6" Class="mt-4">Conteúdo do CSV Gerado (clique em "Baixar CSV" para baixar o arquivo 'dados.csv'):</MudText>
+            <MudTextField @bind-Value="csvResult" ReadOnly="true" Lines="10" FullWidth="true" />
+        </MudItem>
+    }
 
-}
+    @if (csvData != null && csvData.Count > 0)
+    {
+        <MudItem xs="6">
+            <MudText Typo="Typo.h5">Tabela criada a partir do csv gerado</MudText>
+            <MudTable Class="my-3" Items="@csvData" Hover="true" Bordered="true">
+                <HeaderContent>
+                    @if (csvData.Count > 0)
+                    {
+                        @foreach (var header in csvData.First().Keys)
+                        {
+                            <MudTh>@header</MudTh>
+                        }
+                    }
+                </HeaderContent>
+                <RowTemplate Context="item">
+                    @foreach (var value in item.Values)
+                    {
+                        <MudTd>@value</MudTd>
+                    }
+                </RowTemplate>
+            </MudTable>
+        </MudItem>
+    }
+</MudGrid>
 <script src="js/DownloadCsv.js"></script>
 
-
-@code{
+@code {
     List<string> ExtensoesPermitidas = new() { "application/json" };
 
     string _arquivoTemporario = string.Empty;
@@ -87,12 +102,10 @@
     private string _ClasseArrastar = PadraoClasseArrastar;
 
     private void SetClasseArrastar()
-    => _ClasseArrastar = $"{PadraoClasseArrastar} mud-border-primary";
+        => _ClasseArrastar = $"{PadraoClasseArrastar} mud-border-primary";
 
     private void LimparClasseArrastar()
         => _ClasseArrastar = PadraoClasseArrastar;
-
-
 
     private MudFileUpload<IBrowserFile>? _arquivoUpload;
     private IBrowserFile? _arquivoDadosUpload;
@@ -104,12 +117,15 @@
         if (arquivo != null)
         {
             _arquivoDadosUpload = arquivo;
-            if (await ValidarJson()){
+            if (await ValidarJson())
+            {
                 ExibirJson();
                 isValid = true;
             }
             else
+            {
                 _arquivoDadosUpload = null;
+            }
         }
     }
 
@@ -120,26 +136,22 @@
 
         try
         {
-            //Lendo o conteúdo do Json
             var dados = await Conversor.LerJson(_arquivoDadosUpload);
             if (dados == null)
             {
                 await OpenDialogAsync("JSON inválido ou vazio.", "Erro ao ler conteúdo");
                 return;
             }
-           
-            // Converter o conteúdo do Json para CSV
+
             csvResult = Conversor.GerarCsv(dados);
-            csvData = dados; // Gerar dados para a tabela
+            csvData = dados;
             StateHasChanged();
-            
         }
         catch (Exception ex)
         {
             await OpenDialogAsync($"Erro ao processar o JSON: {ex.Message}", "Erro");
         }
     }
-
 
     private async Task<bool> ValidarJson()
     {
@@ -172,17 +184,24 @@
         }
     }
 
+    private void Limpar()
+    {
+        _arquivoTemporario = string.Empty;
+        csvResult = string.Empty;
+        csvData.Clear();
+        isValid = false;
+        StateHasChanged();
+    }
+
     private async Task BaixarCsv()
     {
         try
         {
             if (!string.IsNullOrEmpty(csvResult))
             {
-                // Converter o CSV em um byte array
                 var csvBytes = Encoding.UTF8.GetBytes(csvResult);
                 var csvStream = new MemoryStream(csvBytes);
 
-                // Criar um URL para download
                 using var streamRef = new DotNetStreamReference(stream: csvStream);
                 await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "dados.csv", streamRef);
             }
