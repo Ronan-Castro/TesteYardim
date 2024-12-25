@@ -1,10 +1,13 @@
 using DesafioYardim.Components;
+using DesafioYardim.Service;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
+
+builder.Services.AddScoped<IConversorService, ConversorService>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

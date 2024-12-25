@@ -1,11 +1,16 @@
 ﻿@page "/"
 @using DesafioYardim.Components.Modal
 @using System.Text
+@using DesafioYardim.Service
 @inject IDialogService DialogService
+@inject IConversorService Conversor
+@inject IJSRuntime JSRuntime
+
+
 <PageTitle>Home</PageTitle>
 
 <MudFileUpload T="IBrowserFile"
-               Accept=".png, .jpg, .jpeg"
+               Accept=".json"
                @ref="_arquivoUpload"
                OnFilesChanged="OnInputFileChanged" Hidden="false"
                InputClass="absolute mud-width-full mud-height-full overflow-hidden z-10"
@@ -35,9 +40,16 @@
     Converter de Json para CSV
 </MudButton>
 
+@if (!string.IsNullOrEmpty(csvResult))
+{
+    <MudButton Color="Color.Secondary" OnClick="@BaixarCsv" Variant="Variant.Filled">
+        Baixar CSV
+    </MudButton>
+}
+
 @if (csvData != null && csvData.Count > 0)
 {
-    <MudTable Items="@csvData" Hover="true" Loading="true" LoadingProgressColor="Color.Info">
+    <MudTable Items="@csvData" Hover="true">
         <HeaderContent>
             @if (csvData.Count > 0)
             {
@@ -47,17 +59,18 @@
                 }
             }
         </HeaderContent>
-        <RowTemplate>
-            @foreach (var item in csvData)
-            {
+        <RowTemplate Context="item">
                 @foreach (var value in item.Values)
                 {
                     <MudTd>@value</MudTd>
                 }
-            }
         </RowTemplate>
     </MudTable>
+
 }
+<script src="js/DownloadCsv.js"></script>
+
+
 @code{
     List<string> ExtensoesPermitidas = new() { "application/json" };
 
@@ -106,58 +119,24 @@
 
         try
         {
-            var arquivoStream = _arquivoDadosUpload.OpenReadStream();
-            using (var reader = new System.IO.StreamReader(arquivoStream))
+            //Lendo o conteúdo do Json
+            var dados = await Conversor.LerJson(_arquivoDadosUpload);
+            if (dados == null)
             {
-                var jsonContent = await reader.ReadToEndAsync();
-
-                var dadosJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
-
-                if (dadosJson == null || dadosJson.Count == 0)
-                {
-                    await OpenDialogAsync("JSON inválido ou vazio.", "Erro ao ler conteúdo");
-                    return;
-                }
-                // Converter o conteúdo para CSV
-                csvResult = GerarCsv(dadosJson);
-                csvData = GerarTabela(dadosJson); // Gerar dados para a tabela
-                StateHasChanged(); // Atualiza o componente para refletir as mudanças
+                await OpenDialogAsync("JSON inválido ou vazio.", "Erro ao ler conteúdo");
+                return;
             }
+           
+            // Converter o conteúdo do Json para CSV
+            csvResult = Conversor.GerarCsv(dados);
+            csvData = dados; // Gerar dados para a tabela
+            StateHasChanged();
+            
         }
         catch (Exception ex)
         {
             await OpenDialogAsync($"Erro ao processar o JSON: {ex.Message}", "Erro");
         }
-    }
-
-    // Gera o CSV a partir de um Dictionary<string, object>
-    private string GerarCsv(Dictionary<string, object> dadosJson)
-    {
-        var csv = new StringBuilder();
-
-        // Adicionar cabeçalho do CSV
-        var cabecalho = string.Join(",", dadosJson.Keys);
-        csv.AppendLine(cabecalho);
-
-        // Adicionar valores do JSON no formato CSV
-        var valores = string.Join(",", dadosJson.Values.Select(v => v.ToString()));
-        csv.AppendLine(valores);
-
-        return csv.ToString();
-    }
-
-    private List<Dictionary<string, string>> GerarTabela(Dictionary<string, object> dadosJson)
-    {
-        var tabela = new List<Dictionary<string, string>>();
-        var row = new Dictionary<string, string>();
-
-        foreach (var key in dadosJson.Keys)
-        {
-            row[key] = dadosJson[key]?.ToString() ?? string.Empty;
-        }
-
-        tabela.Add(row);
-        return tabela;
     }
 
 
@@ -189,6 +168,27 @@
         {
             _arquivoTemporario = _arquivoDadosUpload.Name;
             StateHasChanged();
+        }
+    }
+
+    private async Task BaixarCsv()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(csvResult))
+            {
+                // Converter o CSV em um byte array
+                var csvBytes = Encoding.UTF8.GetBytes(csvResult);
+                var csvStream = new MemoryStream(csvBytes);
+
+                // Criar um URL para download
+                using var streamRef = new DotNetStreamReference(stream: csvStream);
+                await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "dados.csv", streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            await OpenDialogAsync($"Erro ao gerar o arquivo CSV: {ex.Message}", "Erro");
         }
     }
 }
