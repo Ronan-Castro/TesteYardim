@@ -7,7 +7,7 @@
 @inject IJSRuntime JSRuntime
 
 
-<PageTitle>Home</PageTitle>
+<PageTitle>ConversorJsonCsv</PageTitle>
 
 <MudFileUpload T="IBrowserFile"
                Accept=".json"
@@ -33,7 +33,7 @@
     </ActivatorContent>
 </MudFileUpload>
 
-<MudButton Color="Color.Primary"
+<MudButton Class="ma-3" Color="Color.Primary"
            Disabled="@(!isValid)"
            OnClick="@ConverterJsonCsv"
            Variant="Variant.Filled">
@@ -42,14 +42,15 @@
 
 @if (!string.IsNullOrEmpty(csvResult))
 {
-    <MudButton Color="Color.Secondary" OnClick="@BaixarCsv" Variant="Variant.Filled">
+    <MudButton Class="ma-3" Color="Color.Secondary" OnClick="@BaixarCsv" Variant="Variant.Filled">
         Baixar CSV
     </MudButton>
 }
 
 @if (csvData != null && csvData.Count > 0)
 {
-    <MudTable Items="@csvData" Hover="true">
+    <MudText Typo="Typo.h3">Tabela criada a partir do csv gerado</MudText>
+    <MudTable Class="my-3" Items="@csvData" Hover="true" Bordered="true" >
         <HeaderContent>
             @if (csvData.Count > 0)
             {
